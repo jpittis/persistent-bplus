@@ -104,6 +104,16 @@ foundChild:
 	return tree.search(key, childPage)
 }
 
+// Insert a key value pair into the tree. Duplicate keys are not allowed.
+func (tree *Tree) Insert(key Key, value Value) error {
+	return errors.New("not implemented")
+}
+
+// Delete a key value pair from the tree.
+func (tree *Tree) Delete(key Key) error {
+	return errors.New("not implemented")
+}
+
 type leafPage struct {
 	*store.Page
 	records []Record
