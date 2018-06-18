@@ -75,7 +75,7 @@ func valueToBuffer(buf []byte, value Value) int {
 	total := 4 + len(value)
 	binary.LittleEndian.PutUint32(buf[0:4], uint32(len(value)))
 	for i := 4; i < total; i++ {
-		buf[i] = value[i]
+		buf[i] = value[i-4]
 	}
 	return total
 }
