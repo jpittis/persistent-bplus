@@ -10,7 +10,7 @@ import (
 // Let's manually build a B+ tree that we know is in the correct format and use that to
 // test our search and read functionality.
 func TestBPlusTree(t *testing.T) {
-	tree, err := newBPlusTree("b_plus_tree", 4, 20)
+	tree, err := newTree("b_plus_tree", 4, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,11 +141,11 @@ func TestBPlusTree(t *testing.T) {
 	}
 }
 
-func newBPlusTree(filename string, branchingFactor, cacheCapacity int) (*BPlusTree, error) {
+func newTree(filename string, branchingFactor, cacheCapacity int) (*Tree, error) {
 	tmpfile, err := ioutil.TempFile("", filename)
 	if err != nil {
 		return nil, err
 	}
 	tmpfile.Close()
-	return NewBPlusTree(tmpfile.Name(), branchingFactor, cacheCapacity)
+	return NewTree(tmpfile.Name(), branchingFactor, cacheCapacity)
 }

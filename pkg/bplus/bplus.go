@@ -8,30 +8,36 @@ import (
 )
 
 var (
+	// ErrKeyNotFound is returned when a key is not present in the tree.
 	ErrKeyNotFound = errors.New("key not found")
 )
 
+// Key is the key used to lookup values in a B+ tree.
 type Key uint32
 
+// Value is the data stored in the B+ tree.
 type Value []byte
 
+// Record represents a key value pair stored in a B+ tree.
 type Record struct {
 	Key   Key
 	Value Value
 }
 
-type BPlusTree struct {
+// Tree implemented a persisted B+ tree with a page cache.
+type Tree struct {
 	store           *store.PageStore
 	root            *branchPage
 	branchingFactor int
 }
 
-func NewBPlusTree(filename string, branchingFactor, cacheCapacity int) (*BPlusTree, error) {
+// NewTree constructs a persisted B+ tree in the given file.
+func NewTree(filename string, branchingFactor, cacheCapacity int) (*Tree, error) {
 	s, err := store.NewPageStore(filename, cacheCapacity)
 	if err != nil {
 		return nil, err
 	}
-	tree := &BPlusTree{
+	tree := &Tree{
 		store:           s,
 		branchingFactor: branchingFactor,
 	}
@@ -39,7 +45,7 @@ func NewBPlusTree(filename string, branchingFactor, cacheCapacity int) (*BPlusTr
 	return tree, err
 }
 
-func (tree *BPlusTree) allocateRootNode() error {
+func (tree *Tree) allocateRootNode() error {
 	pageID, err := tree.store.Allocate()
 	if err != nil {
 		return err
@@ -53,7 +59,7 @@ func (tree *BPlusTree) allocateRootNode() error {
 }
 
 // Read a value from the tree, return an error if it's not found.
-func (tree *BPlusTree) Read(key Key) (Value, error) {
+func (tree *Tree) Read(key Key) (Value, error) {
 	if len(tree.root.keys) == 0 {
 		return nil, ErrKeyNotFound
 	}
@@ -69,7 +75,7 @@ func (tree *BPlusTree) Read(key Key) (Value, error) {
 	return nil, ErrKeyNotFound
 }
 
-func (tree *BPlusTree) search(key Key, node *store.Page) (*leafPage, error) {
+func (tree *Tree) search(key Key, node *store.Page) (*leafPage, error) {
 	if isLeafPage(node) {
 		leaf := &leafPage{Page: node}
 		leaf.fromBuffer()
