@@ -2,8 +2,13 @@ package bplus
 
 import (
 	"encoding/binary"
+	"errors"
 
 	"github.com/jpittis/bplus/pkg/store"
+)
+
+var (
+	ErrKeyNotFound = errors.New("key not found")
 )
 
 type Key uint32
@@ -47,12 +52,58 @@ func (tree *BPlusTree) allocateRootNode() error {
 	return nil
 }
 
+// Read a value from the tree, return an error if it's not found.
+func (tree *BPlusTree) Read(key Key) (Value, error) {
+	if len(tree.root.keys) == 0 {
+		return nil, ErrKeyNotFound
+	}
+	leaf, err := tree.search(key, tree.root.Page)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range leaf.records {
+		if r.Key == key {
+			return r.Value, nil
+		}
+	}
+	return nil, ErrKeyNotFound
+}
+
+func (tree *BPlusTree) search(key Key, node *store.Page) (*leafPage, error) {
+	if isLeafPage(node) {
+		leaf := &leafPage{Page: node}
+		leaf.fromBuffer()
+		return leaf, nil
+	}
+	branch := &branchPage{Page: node}
+	branch.fromBuffer()
+	var childPageID store.PageID
+	if key < branch.keys[0] {
+		childPageID = branch.pointers[0]
+		goto foundChild
+	}
+	// Skip the last key.
+	for i := 1; i < len(branch.keys); i++ {
+		if key < branch.keys[i] {
+			childPageID = branch.pointers[i]
+			goto foundChild
+		}
+	}
+	childPageID = branch.pointers[len(branch.pointers)-1]
+foundChild:
+	childPage, err := tree.store.Load(childPageID)
+	if err != nil {
+		return nil, err
+	}
+	return tree.search(key, childPage)
+}
+
 type leafPage struct {
 	*store.Page
 	records []Record
 }
 
-func isLeafPage(page store.Page) bool {
+func isLeafPage(page *store.Page) bool {
 	return page.Buf[0] == 1
 }
 
@@ -72,12 +123,11 @@ func keyToBuffer(buf []byte, key Key) int {
 }
 
 func valueToBuffer(buf []byte, value Value) int {
-	total := 4 + len(value)
 	binary.LittleEndian.PutUint32(buf[0:4], uint32(len(value)))
-	for i := 4; i < total; i++ {
-		buf[i] = value[i-4]
+	for i := 0; i < len(value); i++ {
+		buf[i+4] = value[i]
 	}
-	return total
+	return 4 + len(value)
 }
 
 func (p *leafPage) fromBuffer() {
@@ -102,11 +152,10 @@ func keyFromBuffer(buf []byte) (Key, int) {
 func valueFromBuffer(buf []byte) (Value, int) {
 	valueLen := int(binary.LittleEndian.Uint32(buf[0:4]))
 	value := Value(make([]byte, valueLen))
-	total := 4 + valueLen
-	for i := 4; i < total; i++ {
-		value[i] = buf[i]
+	for i := 0; i < valueLen; i++ {
+		value[i] = buf[i+4]
 	}
-	return value, valueLen
+	return value, valueLen + 4
 }
 
 type branchPage struct {
@@ -124,6 +173,7 @@ func (p *branchPage) toBuffer() {
 		current += 4
 	}
 	binary.LittleEndian.PutUint32(p.Buf[current:], uint32(len(p.pointers)))
+	current += 4
 	for _, pointer := range p.pointers {
 		binary.LittleEndian.PutUint32(p.Buf[current:], uint32(pointer))
 		current += 4
@@ -131,6 +181,7 @@ func (p *branchPage) toBuffer() {
 }
 
 func (p *branchPage) fromBuffer() {
+	// Skip first leaf identifier byte.
 	numKeys := binary.LittleEndian.Uint32(p.Buf[1:5])
 	p.keys = make([]Key, numKeys)
 	current := 5
@@ -140,6 +191,7 @@ func (p *branchPage) fromBuffer() {
 		current += 4
 	}
 	numPointers := binary.LittleEndian.Uint32(p.Buf[current:])
+	current += 4
 	p.pointers = make([]store.PageID, numPointers)
 	for i := 0; i < int(numPointers); i++ {
 		pointer := store.PageID(binary.LittleEndian.Uint32(p.Buf[current:]))

@@ -15,6 +15,13 @@ func TestBPlusTree(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Before we do anything, let's make sure an empty tree returns an err on read rather
+	// than crashing.
+	value, err := tree.Read(Key(0))
+	if err != ErrKeyNotFound {
+		t.Fatalf("found expected value %+v", value)
+	}
+
 	// Our manual tree has 10 nodes, with a branch factor of 4 and looks something like
 	// this.
 	//
@@ -112,6 +119,26 @@ func TestBPlusTree(t *testing.T) {
 	root.keys = []Key{7}
 	root.pointers = []store.PageID{7, 8}
 	root.toBuffer()
+
+	// Search for all the keys and make sure they're found.
+	for key := 1; key < 11; key++ {
+		value, err := tree.Read(Key(key))
+		if err != nil {
+			t.Fatal(key, err)
+		}
+		if int(value[0]) != key {
+			t.Fatalf("expected %d == %d", value[0], key)
+		}
+	}
+	// Test that we can't find some keys that shoudn't be in the tree.
+	value, err = tree.Read(Key(0))
+	if err != ErrKeyNotFound {
+		t.Fatalf("found expected value %+v", value)
+	}
+	value, err = tree.Read(Key(11))
+	if err != ErrKeyNotFound {
+		t.Fatalf("found expected value %+v", value)
+	}
 }
 
 func newBPlusTree(filename string, branchingFactor, cacheCapacity int) (*BPlusTree, error) {
